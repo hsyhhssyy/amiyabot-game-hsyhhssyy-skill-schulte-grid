@@ -31,10 +31,17 @@ class SkillSchulteGridPluginInstance(PluginInstance):
                 temp_dict[skill_name] = ArknightsGameData.operators[op_id].name
                 dict_keys.append(skill_name)
         
-        #然后排除诸如强力击之类的不能锁定干员的技能名
         for skill_name in temp_dict.keys():
-            if dict_keys.count(skill_name)<=1:
-                skill_name_dict[skill_name]=temp_dict[skill_name]
+            #排除冲锋号令之类被多个干员持有的技能名
+            if dict_keys.count(skill_name)>1:
+                continue
+
+            #排除急救，急救模式之类技能名有重叠的技能名，注意此处将会保留急救而放弃急救模式，也就是如果有人是我的开头，那我就不算了
+            if any((sk!=skill_name and skill_name.startswith(sk)) for sk in dict_keys):
+                log.info(skill_name)
+                continue
+
+            skill_name_dict[skill_name]=temp_dict[skill_name]
 
         skills=''
         for skill_name in skill_name_dict:
@@ -65,7 +72,7 @@ def format_answer(answer_candidate):
 
 
 async def display_reward(data,rewards,users):
-    disp = Chain(data, at=False).text('最终成绩：\n')
+    text = '最终成绩：\n'
     for user_id in rewards.keys():
         points = rewards[user_id]
         if points < 0 :
@@ -73,8 +80,10 @@ async def display_reward(data,rewards,users):
         if points > game_config.jade_point_max:
             points = game_config.jade_point_max
 
-        disp = disp.text(f'{users[user_id]}：{points}分\n') 
+        text = text + f'{users[user_id]}：{points}分\n'
         UserInfo.add_jade_point(user_id, points, game_config.jade_point_max)
+    
+    disp = Chain(data, at=False).text(text)
     await data.send(disp)
 
 def add_points(answer,rewards,users,points):
@@ -100,12 +109,15 @@ async def _(data: Message):
     else:
         grid_size = 10
 
+    if grid_size>10:
+        grid_size = 10
+
     log.info(f'创建方格{grid_size}x{grid_size}')
 
     puzzle = None
 
     for _ in range(0,5):
-        words = words + ['明','日','方','舟']
+        words = words + ['○','○','○','○']
         puzzle,answer = await build_puzzle(grid_size,words,200)
 
         if puzzle != None:
@@ -131,7 +143,7 @@ async def _(data: Message):
             operator_name = skill_name_dict[ans]
             answer_candidate[operator_name].append(ans)
     
-    ask = Chain(data,at=False).text(f'博士，这次的题目是：\n{row_str}\n').text(f'上图中有{len(answer_candidate)}位干员的{len(answer)}个技能，请博士们回答这些干员的名字。注意这些技能名的每个字都是相连的，请不要跳跃寻找。共计时5分钟。')
+    ask = Chain(data,at=False).html(f'{curr_dir}/template/schulte-grid.html',data=puzzle,width = 800).text(f'上图中有{len(answer_candidate)}位干员的技能，请博士们回答这些干员的名字。注意这些技能名的每个字都是相连的，请不要跳跃寻找。共计时5分钟。')
 
     last_talk = datetime.datetime.now()
     start_time = datetime.datetime.now()
@@ -175,9 +187,9 @@ async def _(data: Message):
                 await display_reward(data,rewards,users)
                 return
             
-            if any_match(answer.text, ['作弊']):
-                await data.send(Chain(answer, at=False).text(f'测试作弊：{format_answer(answer_candidate)}\n'))
-                continue
+            # if any_match(answer.text, ['作弊']):
+            #    await data.send(Chain(answer, at=False).text(f'测试作弊：{format_answer(answer_candidate)}\n'))
+            #    continue
 
             if any_match(answer.text, answer_candidate.keys()):
                 reward_points = int(wordle_config.rewards.bingo * 1)

@@ -11,12 +11,16 @@
 </head>
 <body>
     <div id="template">
-        <div class="grid-container" style="grid-template-columns: repeat({data[0].length},auto)">
-        <div v-for="row in data">
-            <div v-for="col in row" class="cell">
-                {{ col }}
+        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(size) }">
+            <div v-for="col in expanded_data" class="cell">
+                <div class="text_div">
+                    <div v-if="col!='○'" class="text" :style="{ 'font-size' : ''+(100/size*0.6)+'vw' }">
+                        {{col}}
+                    </div>
+                    <img v-if="col=='○'" class="img" src="./img/amiya.png"/>
+                </div>
             </div>
-        </div></div>
+        </div>
     </div>
 </body>
 <script src="js/vue.min.js"></script>
@@ -31,12 +35,24 @@
         },
         methods: {
             init(data) {
+                expanded_data = []
+
+                for (i = 0; i < data.length; i++) {
+                    for (j = 0; j < data[i].length; j++) {
+                        expanded_data.push(data[i][j])
+                    }
+                }
+                console.log(expanded_data)
                 this.$set(this, 'data', data)
+                this.$set(this, 'expanded_data', expanded_data)
+                this.$set(this, 'size', data.length)
             },
         },
         data() {
             return {
-                data: {},
+                data: [['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟']],
+                expanded_data: [],
+                size: 4
             }
         },
         mounted() {
