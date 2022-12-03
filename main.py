@@ -82,7 +82,10 @@ def add_points(answer,rewards,users,points):
         rewards[answer.user_id] = 0
         users[answer.user_id] = answer.nickname
     
-    rewards[answer.user_id] = rewards[answer.user_id] + points
+    point  = rewards[answer.user_id] + points
+    if point <0:
+        point = 0
+    rewards[answer.user_id] = point
 
 
 @bot.on_message(keywords=['技能方格'],level=5)

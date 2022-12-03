@@ -1,19 +1,21 @@
-> 让兔兔可以公平的裁判一场决斗
+> 玩一个猜技能游戏
 
-    - 说 `兔兔，我要与[@一个人]决斗` 
-    - 对方需在30秒内回复`同意`，否则决斗会取消。
-    - 接下来，阿米娅会在60秒内的一个随机时间喊出`开始`，在这之后最先发送`开枪`的博士胜出，在喊开始之前发送的博士会被视为犯规。
-    - 如果兔兔是群管理员，则兔兔会对失败的人执行禁言。
-    - 两人决斗期间，兔兔不会发送任何消息也不会响应任何其他指令。
-    - 具体使用方式，请按照兔兔的引导提示进行。
+    - 说 `兔兔技能方格5x5` 或者 `兔兔技能方格10x10` 或者 任意一个尺寸（不建议太大，会导致兔兔卡死）
+    - 接下来，阿米娅展示一个方格图，里面每一格写了一个字。
+    - 玩家需要在这里面寻找干员的技能名，找到以后，在群内说出干员的名字。
+    - 答对一个干员+300分，答错一个干员-100分，不会扣到0以下。
+    - 5分钟没有完成方格，或者30秒没人说话，或者方格内干员全部被答出，则游戏结束。
 
 > 禁言功能只有在通过mirai控制的QQ群内才能有效，其他情况下兔兔只会公布胜者。
 
-> [项目地址:Github](https://github.com/hsyhhssyy/amiyabot-game-hsyhhssyy-duel/)
+> [项目地址:Github](https://github.com/hsyhhssyy/amiyabot-game-hsyhhssyy-skill-schulte-grid/)
+
+> [遇到问题可以在这里反馈(Github)](https://github.com/hsyhhssyy/amiyabot-game-hsyhhssyy-skill-schulte-grid/issues/new/)
+
+> [如果上面的连接无法打开可以在这里反馈(Gitee)](https://gitee.com/hsyhhssyy/amiyabot-plugin-bug-report/issues/new)
 
 > [Logo作者:Sesern老师](https://space.bilibili.com/305550122)
 
 |  版本   | 变更  |
 |  ----  | ----  |
 | 1.0  | 初版登录商店 |
-| 1.1  | 适配新版插件商店 |

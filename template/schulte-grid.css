@@ -1,0 +1,41 @@
+* {
+    font-size: 18px;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+}
+
+#template {
+    width: 800px;
+    height: 800px;
+    padding: 20px;
+    color: #fff;
+    background-color: black;
+    position: relative;
+    border-radius: 8px;
+}
+
+.grid-container {
+    display: grid;
+    grid-gap: 10px;
+    width: fit-content;
+    background-color: #2196F3;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.cell{
+    list-style: none;
+    display: inline-block;
+    width: 100px;
+    height: 100px;
+    line-height: 100px;
+    text-align: center;
+    color: black;
+    background-color: #fbf8cd;
+    margin: 8px 8px;
+    border-radius: 6px;
+    font-size: 10vw;
+}
