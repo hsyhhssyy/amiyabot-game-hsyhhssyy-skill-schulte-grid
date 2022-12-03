@@ -38,7 +38,7 @@ class SkillSchulteGridPluginInstance(PluginInstance):
 
             #排除急救，急救模式之类技能名有重叠的技能名，注意此处将会保留急救而放弃急救模式，也就是如果有人是我的开头，那我就不算了
             if any((sk!=skill_name and skill_name.startswith(sk)) for sk in dict_keys):
-                log.info(skill_name)
+                # log.info(skill_name)
                 continue
 
             skill_name_dict[skill_name]=temp_dict[skill_name]
@@ -47,14 +47,14 @@ class SkillSchulteGridPluginInstance(PluginInstance):
         for skill_name in skill_name_dict:
             skills +=f'({skill_name}x{skill_name_dict[skill_name]})'
 
-        log.info(f'{skills} - {len(skill_name_dict)}')
+        # log.info(f'{skills} - {len(skill_name_dict)}')
 
         for operator in ArknightsGameData().operators:
             operator_name_dict.append(operator)
 
 bot = SkillSchulteGridPluginInstance(
     name='技能方格游戏',
-    version='1.0',
+    version='1.2',
     plugin_id='amiyabot-game-hsyhhssyy-skill-schulte-grid',
     plugin_type='',
     description='玩一场技能方格游戏',
@@ -66,10 +66,15 @@ def format_answer(answer_candidate):
     for key in answer_candidate.keys():
         r_str += f'干员"{key}"的技能'
         for skill in answer_candidate[key]:
-            r_str += f'"{skill}"'
+            r_str += f'"{skill[0]}"'
         r_str += '，'
     return r_str.rstrip('，')
 
+def format_candidate(answer_candidate_value):
+    r_str=''
+    for ans in answer_candidate_value:
+        r_str += f'"{ans[0]}"'
+    return r_str
 
 async def display_reward(data,rewards,users):
     text = '最终成绩：\n'
@@ -112,21 +117,15 @@ async def _(data: Message):
     if grid_size>10:
         grid_size = 10
 
-    log.info(f'创建方格{grid_size}x{grid_size}')
+    # log.info(f'创建方格{grid_size}x{grid_size}')
 
     puzzle = None
 
-    for _ in range(0,5):
-        words = words + ['○','○','○','○']
-        puzzle,answer = await build_puzzle(grid_size,words,200)
+    await data.send(Chain(data, at=False).text(f'正在出题，请稍候......'))
 
-        if puzzle != None:
-            row_str=''
-            for row in puzzle:
-                for col in row:
-                    row_str=row_str+f'{col}\t'
-                row_str = row_str+'\n'
-            break
+    words = words + ['○','○','○','○','○']
+    for _ in range(0,5):
+        puzzle,answer = await build_puzzle(grid_size,words,500)
     
     if puzzle == None:
         return Chain(data,at=False).text(f'抱歉，兔兔一时间没有想到合适的谜题，请再试一次吧。')
@@ -134,13 +133,13 @@ async def _(data: Message):
     #寻找对应的干员
     answer_candidate = {}
     for ans in answer:
-        if ans in skill_name_dict.keys():
-            operator_name = skill_name_dict[ans]
+        if ans[0] in skill_name_dict.keys():
+            operator_name = skill_name_dict[ans[0]]
             answer_candidate[operator_name]=[]
     
     for ans in answer:
-        if ans in skill_name_dict.keys():
-            operator_name = skill_name_dict[ans]
+        if ans[0] in skill_name_dict.keys():
+            operator_name = skill_name_dict[ans[0]]
             answer_candidate[operator_name].append(ans)
     
     ask = Chain(data,at=False).html(f'{curr_dir}/template/schulte-grid.html',data=puzzle,width = 800).text(f'上图中有{len(answer_candidate)}位干员的技能，请博士们回答这些干员的名字。注意这些技能名的每个字都是相连的，请不要跳跃寻找。共计时5分钟。')
@@ -191,11 +190,20 @@ async def _(data: Message):
             #    await data.send(Chain(answer, at=False).text(f'测试作弊：{format_answer(answer_candidate)}\n'))
             #    continue
 
-            if any_match(answer.text, answer_candidate.keys()):
+            if answer.text in answer_candidate.keys():
                 reward_points = int(wordle_config.rewards.bingo * 1)
-                await data.send(Chain(answer).text(f'回答正确！图中包括干员{answer.text}的技能：{answer_candidate[answer.text]}。合成玉+{reward_points}'))
+
+                reward_txt = f'回答正确！图中包括干员{answer.text}的技能：{format_candidate(answer_candidate[answer.text])}。合成玉+{reward_points}'
+
                 
                 add_points(answer,rewards,users,reward_points)
+
+                # 从puzzle移除这个字
+                for ans in answer_candidate[answer.text]:
+                    for ans_path in ans[1]:
+                        puzzle[ans_path[1]][ans_path[0]] = '×'+puzzle[ans_path[1]][ans_path[0]]
+
+                await data.send(Chain(answer).html(f'{curr_dir}/template/schulte-grid.html',data=puzzle,width = 800).text(reward_txt))
 
                 del answer_candidate[answer.text]
 
@@ -206,7 +214,7 @@ async def _(data: Message):
                 
                 continue
             
-            if any_match(answer.text, operator_name_dict):
+            if answer.text in operator_name_dict:
                 reward_points = int(wordle_config.rewards.fail * 1)
 
                 add_points(answer,rewards,users,0-reward_points)
