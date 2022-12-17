@@ -54,7 +54,7 @@ class SkillSchulteGridPluginInstance(PluginInstance):
 
 bot = SkillSchulteGridPluginInstance(
     name='技能方格游戏',
-    version='1.2',
+    version='1.3',
     plugin_id='amiyabot-game-hsyhhssyy-skill-schulte-grid',
     plugin_type='',
     description='玩一场技能方格游戏',
@@ -169,7 +169,7 @@ async def _(data: Message):
                     return
 
                 if  time_delta - last_talk < datetime.timedelta(seconds=95) and time_delta - last_talk > datetime.timedelta(seconds=90):
-                    await data.send(Chain(data, at=False).text(f'30秒内没有博士回答任何答案的话，本游戏就要结束咯~ 猜不出来的话，可以发送“下一题”来跳过本题。'))
+                    await data.send(Chain(data, at=False).text(f'30秒内没有博士回答任何答案的话，本游戏就要结束咯~，不想猜了的话，可以发送“不玩了”结束游戏。'))
                     continue
                 elif datetime.datetime.now() - last_talk > datetime.timedelta(seconds=120):
                     await data.send(Chain(data, at=False).text(f'时间到，还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))

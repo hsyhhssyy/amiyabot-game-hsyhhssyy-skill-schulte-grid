@@ -10,18 +10,18 @@ async def build_puzzle(size,words,timeout=10000):
 
     puzzle = build_grid(size)
 
-    final_puzzle,answers = build_puzzle_rec(puzzle,deep_copy_shuffle(words),[],[0,timeout])
+    final_puzzle,answers = await build_puzzle_rec(puzzle,deep_copy_shuffle(words),[],[0,timeout])
 
     return final_puzzle,answers
 
 # 根据一个填了一部分的puzzle，构建一个填满的puzzle，按照words的顺序来尝试
 # 测试通过
-def build_puzzle_rec(puzzle,words,answers,pc):
+async def build_puzzle_rec(puzzle,words,answers,pc):
 
     pc[0] +=1
 
     if pc[0]%100 ==0 :
-        print(pc[0])
+        print_log(pc[0])
 
     if pc[0] > pc[1]:
         return None,'超过最大性能计数'
@@ -46,7 +46,7 @@ def build_puzzle_rec(puzzle,words,answers,pc):
         word_index += 1
 
 
-        candidates = deep_copy_shuffle(try_fill_this_word(puzzle,word))
+        candidates = deep_copy_shuffle( await try_fill_this_word(puzzle,word) )
         
         # 如果candidate里有填好的就返回
         for can in candidates:
@@ -57,12 +57,12 @@ def build_puzzle_rec(puzzle,words,answers,pc):
 
         # 否则表示已经填进去了对于每一个candidate，继续尝试用下一个单词表去fill word
         new_words = words[word_index:len(words):]
-        # print(new_words)
+        print_log(new_words)
         for can in candidates:
             
             new_answers = deep_copy(answers)
             new_answers.append((word,can[1]))
-            ret,ans =  build_puzzle_rec(can[0],new_words,new_answers,pc)
+            ret,ans = await build_puzzle_rec(can[0],new_words,new_answers,pc)
             if pc[0] > pc[1]:
                 return None,'超过最大性能计数'
             if ret != None:
@@ -70,10 +70,16 @@ def build_puzzle_rec(puzzle,words,answers,pc):
 
     return None,'未找到能填满的组合'
 
+# 测试用，输出日志
+def print_log(message):
+    # print(message)
+    pass
+
+
 # 测试用，输出puzzle
 def test_output_puzzle(puzzle):
     for row in puzzle:
-        print(row)
+        print_log(row)
 
 # 生成一个打乱顺序的拷贝
 # 测试通过
@@ -107,7 +113,7 @@ def build_grid(size):
 
 # 验证一个单词是否可以放入其中，并输出所有可以放置的版本，以及放置坐标组
 # 测试通过
-def try_fill_this_word(puzzle,word):
+async def try_fill_this_word(puzzle,word):
     
     valid_puzzles = []
 
@@ -119,13 +125,13 @@ def try_fill_this_word(puzzle,word):
     for blank_pos in range(0,blanks):
         x,y = get_xth_blank_pos(puzzle,blank_pos)
         new_puzzle = puzzle_deep_copy(puzzle)
-        valid_puzzles = valid_puzzles + try_fill_this_word_at(new_puzzle,word,x,y,[])
+        valid_puzzles = valid_puzzles + await  try_fill_this_word_at(new_puzzle,word,x,y,[])
 
     return valid_puzzles
 
 # 验证一个单词是否可以放入指定位置，并输出所有可以放置的版本，以及放置坐标组
 # 测试通过
-def try_fill_this_word_at(puzzle,word,x,y,path):
+async def try_fill_this_word_at(puzzle,word,x,y,path):
     # 第一个字母一定在y,x
     new_puzzle = puzzle_deep_copy(puzzle)
     new_puzzle[y][x] = word[0] #放入第一个单词
@@ -141,22 +147,22 @@ def try_fill_this_word_at(puzzle,word,x,y,path):
     if y>0:
         # 有 [y-1][x] 存在
         if new_puzzle[y-1][x] == '':
-            valid_puzzles = valid_puzzles + try_fill_this_word_at(new_puzzle,word[1:len(word):],x,y-1,path)
+            valid_puzzles = valid_puzzles + await try_fill_this_word_at(new_puzzle,word[1:len(word):],x,y-1,path)
     
     if y<len(puzzle)-1:
         # 有 [y+1][x] 存在
         if new_puzzle[y+1][x] == '':
-            valid_puzzles = valid_puzzles + try_fill_this_word_at(new_puzzle,word[1:len(word):],x,y+1,path)
+            valid_puzzles = valid_puzzles + await try_fill_this_word_at(new_puzzle,word[1:len(word):],x,y+1,path)
     
     if x>0:
         # 有 [y][x-1] 存在
         if new_puzzle[y][x-1] == '':
-            valid_puzzles = valid_puzzles + try_fill_this_word_at(new_puzzle,word[1:len(word):],x-1,y,path)
+            valid_puzzles = valid_puzzles + await  try_fill_this_word_at(new_puzzle,word[1:len(word):],x-1,y,path)
     
     if x<len(puzzle)-1:
         # 有 [y][x+1] 存在
         if new_puzzle[y][x+1] == '':
-            valid_puzzles = valid_puzzles + try_fill_this_word_at(new_puzzle,word[1:len(word):],x+1,y,path)
+            valid_puzzles = valid_puzzles + await  try_fill_this_word_at(new_puzzle,word[1:len(word):],x+1,y,path)
 
     return valid_puzzles
 
@@ -206,8 +212,10 @@ async def test_main():
 
     results,ans = await build_puzzle(5,['Hello','World','Made','Wtf','a','b','c','d','by','China','Fill','How'])
 
+
     if results != None:
         test_output_puzzle(results)
-        print(ans)
+        print_log(ans)
+
 
 # asyncio.run(test_main())
