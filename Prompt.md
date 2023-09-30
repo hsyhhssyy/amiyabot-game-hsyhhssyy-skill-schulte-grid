@@ -137,3 +137,27 @@ for word, coords in answer.items():
             answer_candidate[operator_name] = [{word:word,coords:coords}]
 
 我将据此提问
+
+# 随机模式
+
+请生成一个函数，定义如下
+async def build_puzzle_random_distribution_mode(size_x, size_y, words, timeout):
+
+words是一个字符串的list，size都是int,timeout请忽略
+
+return filled_puzzles, answers
+
+其中filled_puzzles是一个puzzle[y][x]结构的list的list,代表一个 x宽y高的方格
+他每一个格子里是一个字(Character)，来源如下
+
+对words进行随机打乱，然后随机选择一批word，将其每个字填入方格中的随机位置，但是要满足下面的条件：
+
+1、如果 ‘abc’ 是words中的一个词，那么，不可以同时将包含 a，b，c的词都填入方格。
+也就是说，如果ab是words中的一个词，那么你可以填入ax，和cw，但是不能再填入be。
+
+2、整个puzzle中，不能有重复的字。
+
+返回值中的answers则是一个dict[string, list[tuple]]
+它的项的格式是:
+"word中的词":[[1,2],[3,4]]
+他记录了这个word中的词在整个puzzle中的坐标.

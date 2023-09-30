@@ -10,15 +10,18 @@
     <title>template</title>
 </head>
 <body>
-    <div id="template">
+    <div id="template" :style="{ backgroundColor: backcolor }">
         <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(x) }">
             <div v-for="col in expanded_data" class="cell">
                 <div class="text_div">
-                    <div v-if="col!='○'&&!col.startsWith('×')" class="text" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                    <div v-if="col!='❤'&&!col.startsWith('◇')&&!col.startsWith('♣')" class="text" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
                         {{col}}
                     </div>
-                    <img v-if="col=='○'" class="img" src="./img/amiya.png"/>
-                    <div v-if="col.startsWith('×')" class="text_fade" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                    <img v-if="col=='❤'" class="img" src="./img/amiya.png"/>
+                    <div v-if="col.startsWith('◇')" class="text_fade" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                        {{col.substring(1)}}
+                    </div>
+                    <div v-if="col.startsWith('♣')" class="text_fade_recent" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
                         {{col.substring(1)}}
                     </div>
                 </div>
@@ -38,27 +41,37 @@
         },
         methods: {
             init(data) {
+                this.$set(this, 'data', JSON.stringify(data));
+
+                puzzle = data["puzzle"]
                 expanded_data = []
 
-                for (i = 0; i < data.length; i++) {
-                    for (j = 0; j < data[i].length; j++) {
-                        expanded_data.push(data[i][j])
+                for (i = 0; i < puzzle.length; i++) {
+                    for (j = 0; j < puzzle[i].length; j++) {
+                        expanded_data.push(puzzle[i][j])
                     }
                 }
 
-                this.y = data.length;
-                this.x = data[0] ? data[0].length : 0; // 默认data的每个子数组长度是相同的
+                this.y = puzzle.length;
+                this.x = puzzle[0] ? puzzle[0].length : 0; // 默认data的每个子数组长度是相同的
 
-                this.$set(this, 'data', data);
                 this.$set(this, 'expanded_data', expanded_data);
+                if (data["type"] == "continuous") {
+                    this.$set(this, 'backcolor', 'black');
+                } else if (data["type"] == "random") {
+                    this.$set(this, 'backcolor', 'green');
+                } else {
+                    this.$set(this, 'backcolor', 'white');
+                }
             },
         },
         data() {
             return {
-                data: [['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟']],
+                data: { "puzzle": [['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟']], "type": "continuous" },
                 expanded_data: [],
                 x: 0,
-                y: 0
+                y: 0,
+                backcolor: 'black'
             }
         },
         mounted() {
