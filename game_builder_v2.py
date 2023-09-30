@@ -1,122 +1,140 @@
 import random
 import asyncio
 import copy
+import string
 
 # lib主函数
 # 根据给定的列表随机生成一个Grid
-# 生成的时候，避免出现1个空格或者2个空格的情况，因为1个字或者两个字很难找到词语
 # 函数返回Tuple，包含Grid和答案，保证答案唯一性
 # 测试通过
-async def build_puzzle(size_x,size_y,words,timeout=10000):
+async def build_puzzle(size_x, size_y, words, timeout):
 
-    puzzle = build_grid(size_x,size_y)
+    total_word_length = sum(len(word) for word in words)
+    total_cells = size_x * size_y
 
+    if total_word_length < total_cells:
+        return False, "不能填充谜题，单词总长度小于格子数量"
 
+    empty_puzzle = [[0 for _ in range(size_x)] for _ in range(size_y)]
 
-    return final_puzzle,answers
+    corners = [(0, 0), (0, size_y - 1), (size_x - 1, 0), (size_x - 1, size_y - 1)]
+    for _ in range(timeout):
+        x, y = random.choice(corners)
+        success, filled_puzzles, answers = await fill_puzzle(copy.deepcopy(empty_puzzle), words, x, y)
 
-# 生成一个打乱顺序的拷贝
-# 测试通过
-def deep_copy_shuffle(list):
-    new_list = []
-    for x in list:
-        new_list.append(x)
-    
-    random.shuffle(new_list)
-    return new_list
+        if success:
+            return filled_puzzles[0], answers  # Assuming only one valid filled puzzle is returned
+
+    return False, "有限的时间内没有找到合适的谜题"
 
 async def fill_char(puzzle, start_x, start_y, word_left):
-    # 检查起始点是否为空格
     if puzzle[start_y][start_x] != 0:
-        return False
+        return False, [], [], 0
+
+    tmp_puzzle = copy.deepcopy(puzzle)
+    tmp_puzzle[start_y][start_x] = word_left[0]
+
+    print_log(f"Trying to fill char at ({start_x}, {start_y}), word_left:{word_left}")
+
     
-    # 深拷贝puzzle
-    new_puzzle = copy.deepcopy(puzzle)
-    
-    # 填入word_left的第一个字
-    new_puzzle[start_y][start_x] = word_left[0]
-    
-    # 检查剩余部分是否单连通
-    if not is_single_connected(new_puzzle):
-        return False
-    
-    # 如果word_left只有一个字符了，返回True和puzzle
+    if len(word_left) == 1:        
+        if not is_single_connected(tmp_puzzle):
+            print_log("is not single connected")
+            return False, [], [], 0
+        if not validate_connected_graph(tmp_puzzle):
+            return False, [], [], 0
+
     if len(word_left) == 1:
-        return True, new_puzzle
-    
-    # 如果还有空格
+        return True, [tmp_puzzle], [[(start_x, start_y)]], 1
+
+    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    surrounding_cells = []
+
+    for dx, dy in directions:
+        new_x, new_y = start_x + dx, start_y + dy
+        if 0 <= new_x < len(puzzle[0]) and 0 <= new_y < len(puzzle) and tmp_puzzle[new_y][new_x] == 0:
+            surrounding_cells.append((new_x, new_y, count_surrounded(tmp_puzzle, new_x, new_y)))
+
+    surrounding_cells.sort(key=lambda x: x[2], reverse=True)
+    random.shuffle(surrounding_cells)
+
+    valid_puzzles = []
+    valid_paths = []
+    max_length = 0
+
+    for new_x, new_y, _ in surrounding_cells:
+        success, result_puzzles, paths, length = await fill_char(tmp_puzzle, new_x, new_y, word_left[1:])
+        max_length = max(max_length, length)
+        if success:
+            for p, path in zip(result_puzzles, paths):
+                valid_puzzles.append(p)
+                valid_paths.append([(start_x, start_y)] + path)
+
+    if valid_puzzles:
+        return True, valid_puzzles, valid_paths, len(word_left)
     else:
-        # 找到另外四个方向(不包含斜向)的空格的包围数，并按照从高到低排序，同包围数的随机打乱
-        surrounded = []
-        if start_x > 0 and puzzle[start_y][start_x-1] == 0:
-            surrounded.append((start_x-1, start_y, count_surrounded(puzzle, start_x-1, start_y)))
-        if start_x < len(puzzle[0])-1 and puzzle[start_y][start_x+1] == 0:
-            surrounded.append((start_x+1, start_y, count_surrounded(puzzle, start_x+1, start_y)))
-        if start_y > 0 and puzzle[start_y-1][start_x] == 0:
-            surrounded.append((start_x, start_y-1, count_surrounded(puzzle, start_x, start_y-1)))
-        if start_y < len(puzzle)-1 and puzzle[start_y+1][start_x] == 0:
-            surrounded.append((start_x, start_y+1, count_surrounded(puzzle, start_x, start_y+1)))
-        surrounded.sort(key=lambda x: (-x[2], random.random()))
-        
-        # 依次递归调用自己并传入移除word_left第一个字的后面的部分
-        for s in surrounded:
-            result = await fill_char(new_puzzle, s[0], s[1], word_left[1:])
-            if result[0]:
-                return result
-        
-        # 如果全都返回False则自己也返回False
-        return False
-    
+        print_log("valid_puzzles empty")
+        return False, [], [], max_length + 1
+
+# counter=0
+
 async def fill_puzzle(puzzle, words, start_x, start_y):
-    # 检查起始点是否为空格
-    if puzzle[start_y][start_x] != 0:
-        return False
+    if puzzle[start_y][start_x] != 0 or words == []:
+        return False, [], {}
     
-    # 深拷贝puzzle
-    new_puzzle = copy.deepcopy(puzzle)
-    
-    # 随机选择一个单词
-    remaining_spaces = sum([1 for row in new_puzzle for space in row if space == 0])
-    possible_words = [word for word in words if len(word) <= remaining_spaces]
-    if remaining_spaces <= 5:
-        possible_words = [word for word in possible_words if len(word) == remaining_spaces]
-    if not possible_words:
-        return False
-    word = random.choice(possible_words)
-    
-    # 调用fill_char,从start_x,start_y填充这个单词
-    result = await fill_char(new_puzzle, start_x, start_y, word)
-    if not result[0]:
-        return False
-    
-    # 如果没有空格,则返回True和puzzle的Tuple
-    if sum([1 for row in result[1] for space in row if space == 0]) == 0:
-        return True, result[1]
-    
-    # 如果还有空格，则递归调用他自己，选择一个仍然为0的新点继续填入
-    else:
-        # 调用find_max_surrounded(puzzle)，将里面的空格按包围数从大到小排序。如果没有空格，则返回空数组
-        max_surrounded = find_max_surrounded(result[1])
-        for s in max_surrounded:
-            result = await fill_puzzle(result[1], words, s[0], s[1])
-            if result:
-                return result
-        
-        # 如果每一个都返回False，则自己也返回False
-        return False
+    tmp_puzzle = copy.deepcopy(puzzle)
 
-# 生成一个空白的Puzzle list对象
-# 测试通过
-def build_grid(size_x,size_y):
-    puzzle = [] # puzzle[y][x]
-    for _ in range(0,size_y):
-        row = []
-        for _ in range(0,size_x):
-            row.append(0)
+    empty_cells_count = sum(row.count(0) for row in tmp_puzzle)
+    possible_words = [word for word in words if len(word) <= empty_cells_count]
 
-        puzzle.append(row)
+    if empty_cells_count <= 6:
+        possible_words = [word for word in possible_words if len(word) == empty_cells_count]
 
-    return puzzle
+    random.shuffle(possible_words)
+
+    # 为每种长度的word只留下第一个
+    length_to_word = {}
+    for word in possible_words:
+        if len(word) not in length_to_word:
+            length_to_word[len(word)] = word
+
+    possible_words = list(length_to_word.values())
+    
+    test_output_puzzle(puzzle)
+    print_log(f"Trying to fill puzzle from ({start_x}, {start_y}),empty_cell:{empty_cells_count} possibles:{len(possible_words)}")
+
+    # global counter
+    # if counter<=0:
+    #     user_input = input("请输入一个数字: ")
+    #     counter = int(user_input)
+
+    # counter-=1
+
+    while possible_words:
+        word = possible_words.pop(0) 
+        success, result_puzzles, paths, max_fill_length = await fill_char(tmp_puzzle, start_x, start_y, word)
+
+        if not success:
+            possible_words = [w for w in possible_words if len(w) < max_fill_length]
+            continue
+
+        for result_puzzle, path in zip(result_puzzles, paths):
+            if not any(cell == 0 for row in result_puzzle for cell in row):
+                return True, [result_puzzle], {word: path}
+
+            max_surrounding_cells = find_max_surrounded(result_puzzle)
+
+            print_log(max_surrounding_cells)
+
+            for new_x, new_y in max_surrounding_cells:
+                remaining_words = [w for w in words if w != word]
+                success, deeper_puzzles, deeper_answers = await fill_puzzle(result_puzzle, remaining_words, new_x, new_y)
+
+                if success:
+                    deeper_answers[word] = path
+                    return True, deeper_puzzles, deeper_answers
+
+    return False, [], {}
 
 # 寻找被包围边数最多的空格，返回一个坐标的数组,将里面的空格按包围数排序,如果没有空格返回空数组
 # 测试通过
@@ -157,7 +175,6 @@ def count_surrounded(puzzle, x, y):
 # 测试通过
 # AI生成
 def is_single_connected(array):
-
     # 记录已经访问过的位置
     visited = [[False for j in range(len(array[0]))] for i in range(len(array))]
     
@@ -165,7 +182,7 @@ def is_single_connected(array):
     def dfs(i, j):
         if i < 0 or i >= len(array) or j < 0 or j >= len(array[0]):
             return
-        if visited[i][j] or array[i][j] == 1:
+        if visited[i][j] or array[i][j] != 0:
             return
         visited[i][j] = True
         dfs(i-1, j)
@@ -173,35 +190,192 @@ def is_single_connected(array):
         dfs(i, j-1)
         dfs(i, j+1)
     
-    # 遍历所有0，如果有不连通的部分则返回False
+    # 标记是否找到了第一个0
+    found_first_zero = False
     for i in range(len(array)):
         for j in range(len(array[0])):
             if array[i][j] == 0 and not visited[i][j]:
+                # 如果已经找到了第一个0，那么直接返回False
+                if found_first_zero:
+                    return False
                 dfs(i, j)
-                for k in range(len(array)):
-                    for l in range(len(array[0])):
-                        if array[k][l] == 0 and not visited[k][l]:
-                            return False
+                found_first_zero = True
+                
     return True
 
+# 由于Hamiltonian路径是一个NP完全问题，所以这里改为一个更贪婪的算法
+# 在单连通的前提下(所以该函数不能单独调用,还得检测单连通)
+# 要求该图额外满足下述条件。
+def validate_connected_graph(matrix, dead_end_tolarance=0,non_adjacent_walls_tolarance=0):
+
+    def has_non_adjacent_walls(i, j, matrix):
+        rows, cols = len(matrix), len(matrix[0])
+        
+        # 定义8个方向，从上方开始顺时针
+        directions = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)]
+        walls = [0] * 8  # 初始化8位数组
+
+        # 标记有墙的方向为1
+        for idx, (di, dj) in enumerate(directions):
+            ni, nj = i + di, j + dj
+            if 0 <= ni < rows and 0 <= nj < cols:
+                if matrix[ni][nj] != 0:
+                    walls[idx] = 1
+
+        # 找到第一个1的位置
+        try:
+            start_idx = walls.index(1)
+        except ValueError:  # 如果没找到1，直接返回False
+            return False
+
+        # 向前遍历并修改为2
+        idx = (start_idx - 1) % 8
+        while walls[idx] == 1:
+            walls[idx] = 2
+            idx = (idx - 1) % 8
+
+        # 向后遍历并修改为2
+        idx = (start_idx + 1) % 8
+        while walls[idx] == 1:
+            walls[idx] = 2
+            idx = (idx + 1) % 8
+
+        walls[start_idx] = 2  # 设置起始点为2
+
+        # 检查数组中是否还存在1
+        return 1 in walls
+    
+    # 2. 死路条件：
+    # 如果一个0只有一个方向是0
+    def is_dead_end(i, j, matrix):
+        rows, cols = len(matrix), len(matrix[0])
+        
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        count_zeros = 0
+
+        for di, dj in directions:
+            ni, nj = i + di, j + dj
+            if 0 <= ni < rows and 0 <= nj < cols and matrix[ni][nj] == 0:
+                count_zeros += 1
+
+        return count_zeros == 1
+
+    # 3. 通道条件.
+    # 上下都是0，左边是边界或非0，右边是边界或非0，则定义为通道。
+    # 左右都是0，上边是边界或非0，下边是边界或非0，则定义为通道。
+    # 所有的0都不能是通道
+    def is_corridor(i, j, matrix):
+        rows, cols = len(matrix), len(matrix[0])
+        
+        # 通道：上下都是0，左边是边界或非0，右边是边界或非0
+        if (i-1 < 0 or matrix[i-1][j] == 0) and (i+1 >= rows or matrix[i+1][j] == 0):
+            if (j-1 < 0 or matrix[i][j-1] != 0) and (j+1 >= cols or matrix[i][j+1] != 0):
+                return True
+
+        # 通道：左右都是0，上边是边界或非0，下边是边界或非0
+        if (j-1 < 0 or matrix[i][j-1] == 0) and (j+1 >= cols or matrix[i][j+1] == 0):
+            if (i-1 < 0 or matrix[i-1][j] != 0) and (i+1 >= rows or matrix[i+1][j] != 0):
+                return True
+
+        return False
+
+    dead_end_count = 0
+    non_adjacent_walls_count = 0
+    for i in range(len(matrix)):
+        for j in range(len(matrix[0])):
+            if matrix[i][j] == 0:
+                if is_dead_end(i, j, matrix):
+                    dead_end_count += 1
+                    if dead_end_count > dead_end_tolarance:
+                        test_output_puzzle(matrix)
+                        print_log(f"{i}, {j} is_dead_end")
+                        return False
+                    else:
+                        print_log(f"{i}, {j} is_dead_end")
+                else:
+                    if is_corridor(i, j, matrix): 
+                        test_output_puzzle(matrix)
+                        print_log(f"{i}, {j} is_corridor")
+                        return False
+                
+                    if has_non_adjacent_walls(i, j, matrix):
+                        non_adjacent_walls_count+=1
+                        if non_adjacent_walls_count > non_adjacent_walls_tolarance:
+                            test_output_puzzle(matrix)
+                            print_log(f"{i}, {j} has_non_adjacent_walls")
+                            return False
+                        else:
+                            print_log(f"{i}, {j} has_non_adjacent_walls")
+    return True
+
+# 下面这部分都是测试用代码
+
 def print_log(message):
-    print(message)
+    # print(message)
     pass
 
 def test_output_puzzle(puzzle):
     for row in puzzle:
-        print_log(row)
+        new_row = '['
+        for item in row:
+            if item == 0:
+                new_row += " 0 , "
+            else:
+                new_row += f"'{str(item) }', "
+        new_row = new_row.rstrip(', ')  # 去除最后一个逗号和空格
+        new_row += '],'
+        print_log(new_row)
 
-# 下面这部分是测试代码
+
 async def test_main():
 
-    # results,ans = await build_puzzle(5,['Hello','World','Made','Wtf','a','b','c','d','by','China','Fill','How'])
+    temp_puzzle = [
+['b', 'g', 'i', 'k', 'g', 'z', 'x', 'f', 'q', 't'],
+['m', 'h', 'u', 'm', 'j', 'q', 'x', 'd', 's', 'p'],
+['f', 'c', 'c', 'm', 'n', 'o', 'p', 's', 'o', 'v'],
+['p', 'n', 's', 'q', 'o', 'w', 'q', 'r', 'f', 'u'],
+['c', 'k', 'j', 'r', 'i', 'b', 't', 'v', 'w', 'r'],
+['a', 'v', 'x',  0 ,  0 ,  0 , 's', 'z', 'u', 'a'],
+['x', 'j', 'b',  0 ,  0 ,  0 , 'g', 't', 'u', 'w'],
+['r', 'b',  0 ,  0 ,  0 , 'i', 'v', 'p', 'a', 'o'],
+['l', 'b',  0 ,  0 ,  0 , 'k', 'l', 'p', 'i', 'b'],
+['t', 'k', 's', 'a', 'o', 'u', 'o', 'n', 't', 'q'],
+    ]
 
-    puzzle = build_grid(4,3)
-    success,puzzle = await fill_puzzle(puzzle,['Hello','World','Made','Wtf','a','b','c','d','by','China','Fill','How'],0,0)
-    if success:
-        test_output_puzzle(puzzle)
-    else:
-        print_log('Failed')
+#     temp_puzzle = [
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 5, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# ]
 
-asyncio.run(test_main())
+    print_log(validate_connected_graph(temp_puzzle))
+
+    # return
+
+    def generate_random_word(min_length=3, max_length=8):
+        length = random.randint(min_length, max_length)
+        return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
+
+    words_array = [generate_random_word() for _ in range(100)]
+
+    failed_count = 0
+    for i in range(10):
+        puzzle, answer = await build_puzzle(10,10,words_array,1)
+
+        if not puzzle:
+            failed_count += 1
+        else:            
+            test_output_puzzle(puzzle)
+            print_log(answer)
+            print_log("\n")
+
+    print(f"Failed {failed_count} times out of 10 tests.")
+
+# asyncio.run(test_main())

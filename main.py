@@ -1,15 +1,15 @@
 import re
 import datetime
-import asyncio
+import time
 import os
 
 from amiyabot import PluginInstance
-from core.util import any_match,read_yaml
+from core.util import any_match,read_yaml, run_in_thread_pool
 from core import log, Message, Chain
 from core.database.user import UserInfo
 from core.resource.arknightsGameData import ArknightsGameData
 
-from .game_builder import build_puzzle
+from .game_builder_v2 import build_puzzle
 
 curr_dir = os.path.dirname(__file__)
 
@@ -67,6 +67,8 @@ class SkillSchulteGridPluginInstance(PluginInstance):
         # (This is your last for loop, unchanged.)
         for operator in ArknightsGameData().operators:
             operator_name_dict.append(operator)
+    def log(self,str):
+        log.info(str)
 
 bot = SkillSchulteGridPluginInstance(
     name='方格游戏',
@@ -79,20 +81,20 @@ bot = SkillSchulteGridPluginInstance(
 
 running_tasks = set()
 
-def format_answer(answer_candidate):
-    r_str=''
-    for key in answer_candidate.keys():
-        r_str += f'干员"{key}":'
-        for skill in answer_candidate[key]:
-            r_str += f'"{skill[0]}"'
-        r_str += '，'
-    return r_str.rstrip('，')
+def format_answer(candidate_dict):
+    formatted_strs = []
+    for operator_name, answers in candidate_dict.items():
+        for answer in answers:
+            word = answer["word"]  # 从字典结构中直接获取"word"
+            formatted_strs.append(f'干员"{operator_name}":"{word}"')
+    return "，".join(formatted_strs)
 
-def format_candidate(answer_candidate_value):
-    r_str=''
-    for ans in answer_candidate_value:
-        r_str += f'"{ans[0]}"'
-    return r_str
+def format_candidate(candidate_dict, operator_name):
+    answers = candidate_dict.get(operator_name, [])  # 直接从字典中获取operator_name的值，如果不存在则返回空列表
+    for answer in answers:
+        word = answer["word"]  # 从字典结构中直接获取"word"
+        return word
+    return ""  # 如果找不到对应的operator_name，返回空字符串
 
 async def display_reward(data,rewards,users):
     text = '最终成绩：\n'
@@ -120,14 +122,26 @@ def add_points(answer,rewards,users,points):
     rewards[answer.user_id] = point
 
 async def play_game(data: Message, words: list, words_map: dict,type:str):
-    match = re.search('方格(\d*?)x(\d*?)', data.text_digits)
-    if match:
-        grid_size = int(match.group(1))
-    else:
-        grid_size = 10
 
-    if grid_size > 10:
-        grid_size = 10
+    match = re.search('方格(\d+)x(\d+)', data.text_digits)
+
+    bot.log(f'创建方格{match.group(1)}x{match.group(2)}')
+
+    if match:
+        grid_x = int(match.group(1))
+        grid_y = int(match.group(2))
+    else:
+        grid_x = 7
+        grid_y = 7
+
+    if grid_x > 10:
+        grid_x = 10
+    if grid_y > 10:
+        grid_y = 10
+    if grid_x < 4:
+        grid_x = 4
+    if grid_y < 4:
+        grid_y = 4
 
     # log.info(f'创建方格{grid_size}x{grid_size}')
     channel_id = data.channel_id
@@ -140,28 +154,44 @@ async def play_game(data: Message, words: list, words_map: dict,type:str):
     running_tasks.add(channel_id)
     try:
         await data.send(Chain(data, at=False).text(f'正在出题，请稍候......'))
-
-        words = words + ['○','○','○','○','○']
-        for _ in range(0,5):
-            puzzle, answer = await build_puzzle(grid_size, words, 500)
+        start_time = time.time() 
+        # words = words # + ['○','○','○','○','○']
+        puzzle, answer = await build_puzzle(grid_x,grid_y, words, 3)
+        end_time = time.time() 
+        elapsed_time = (end_time - start_time) * 1000
+        bot.log(f'题目已创建，用时{elapsed_time:.2f} ms')
 
         if puzzle == None:
             await data.send(Chain(data, at=False).text(f'抱歉，兔兔一时间没有想到合适的谜题，请再试一次吧。'))
             return
 
+        for row in puzzle:
+            new_row = '['
+            for item in row:
+                if item == 0:
+                    new_row += " 0 , "
+                else:
+                    new_row += f"'{str(item) }', "
+            new_row = new_row.rstrip(', ')  # 去除最后一个逗号和空格
+            new_row += '],'
+            bot.log(new_row)
+
         #寻找对应的干员
         answer_candidate = {}
-        for ans in answer:
-            if ans[0] in words_map.keys():
-                operator_name = words_map[ans[0]]
-                answer_candidate[operator_name] = []
 
-        for ans in answer:
-            if ans[0] in words_map.keys():
-                operator_name = words_map[ans[0]]
-                answer_candidate[operator_name].append(ans)
+        for word, coords in answer.items():
+            if word in words_map.keys():
+                operator_name = words_map[word]
+                
+                # 如果operator_name已经在answer_candidate中，则直接添加到列表中
+                if operator_name in answer_candidate:
+                    answer_candidate[operator_name].append({"word": word, "coords": coords})
+                # 如果operator_name不在answer_candidate中，创建一个新列表并添加条目
+                else:
+                    answer_candidate[operator_name] = [{"word": word, "coords": coords}]
 
-        ask = Chain(data, at=False).html(f'{curr_dir}/template/schulte-grid.html', data=puzzle, width=800).text(f'上图中有{len(answer_candidate)}位干员的{type}，请博士们回答这些干员的名字。注意这些{type}名的每个字都是相连的，请不要跳跃寻找。共计时5分钟。')
+
+        ask = Chain(data, at=False).html(f'{curr_dir}/template/schulte-grid.html', data=puzzle, width=800,height=320).text(f'上图中有{len(answer_candidate)}位干员的{type}，请博士们回答这些干员的名字。\n注意这些{type}名的每个字都是相连的，请不要跳跃寻找。共计时5分钟。')
 
         last_talk = datetime.datetime.now()
         start_time = datetime.datetime.now()
@@ -210,15 +240,16 @@ async def play_game(data: Message, words: list, words_map: dict,type:str):
                 if answer.text in answer_candidate.keys():
                     reward_points = int(wordle_config.rewards.bingo * 1)
 
-                    reward_txt = f'回答正确！图中包括干员{answer.text}的{type}：{format_candidate(answer_candidate[answer.text])}。合成玉+{reward_points}'
+                    reward_txt = f'回答正确！图中包括干员{answer.text}的{type}：{format_candidate(answer_candidate,answer.text)}。合成玉+{reward_points}'
 
                     
                     add_points(answer,rewards,users,reward_points)
 
                     # 从puzzle移除这个字
                     for ans in answer_candidate[answer.text]:
-                        for ans_path in ans[1]:
-                            puzzle[ans_path[1]][ans_path[0]] = '×'+puzzle[ans_path[1]][ans_path[0]]
+                        for coord in ans["coords"]:
+                            x, y = coord  # 从新的字典结构中获取"coords"，并直接解包为y和x
+                            puzzle[y][x] = '×' + puzzle[y][x]
 
                     await data.send(Chain(answer).html(f'{curr_dir}/template/schulte-grid.html',data=puzzle,width = 800).text(reward_txt))
 

@@ -11,14 +11,14 @@
 </head>
 <body>
     <div id="template">
-        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(size) }">
+        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(x) }">
             <div v-for="col in expanded_data" class="cell">
                 <div class="text_div">
-                    <div v-if="col!='○'&&!col.startsWith('×')" class="text" :style="{ 'font-size' : ''+(100/size*0.6)+'vw' }">
+                    <div v-if="col!='○'&&!col.startsWith('×')" class="text" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
                         {{col}}
                     </div>
                     <img v-if="col=='○'" class="img" src="./img/amiya.png"/>
-                    <div v-if="col.startsWith('×')" class="text_fade" :style="{ 'font-size' : ''+(100/size*0.6)+'vw' }">
+                    <div v-if="col.startsWith('×')" class="text_fade" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
                         {{col.substring(1)}}
                     </div>
                 </div>
@@ -45,17 +45,20 @@
                         expanded_data.push(data[i][j])
                     }
                 }
-                console.log(expanded_data)
-                this.$set(this, 'data', data)
-                this.$set(this, 'expanded_data', expanded_data)
-                this.$set(this, 'size', data.length)
+
+                this.y = data.length;
+                this.x = data[0] ? data[0].length : 0; // 默认data的每个子数组长度是相同的
+
+                this.$set(this, 'data', data);
+                this.$set(this, 'expanded_data', expanded_data);
             },
         },
         data() {
             return {
                 data: [['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟'],['明','日','方','舟']],
                 expanded_data: [],
-                size: 4
+                x: 0,
+                y: 0
             }
         },
         mounted() {
