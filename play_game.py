@@ -10,6 +10,7 @@ from core.resource.arknightsGameData import ArknightsGameData
 
 from .game_builders.continuous_mode import build_puzzle_continuous_mode
 from .game_builders.random_distribution_mode import build_puzzle_random_distribution_mode
+from .game_manager import GameManager
 
 running_tasks = set()
 
@@ -208,89 +209,76 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         ask = Chain(data, at=False).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800, height=320).text(
             f'上图中有{len(answer_candidate)}位干员的{operator_data_type}，请博士们回答这些干员的名字。\n当前模式为：{mode_str},共计时5分钟。')
 
-        last_talk = datetime.datetime.now()
-        start_time = datetime.datetime.now()
         max_time = 60 * 5
         rewards = {}
         users = {}
+        warning_shown = False
 
+        manager = GameManager()
+        
         while True:
-            event = await data.wait_channel(ask,
-                                            force=True,
-                                            clean=bool(ask),
-                                            max_time=5)
+            message, elapsed_time, time_since_last_talk = await manager.wait(data, ask)
 
-            ask = None
+            if elapsed_time>max_time or (warning_shown==True and time_since_last_talk>60):
+                await data.send(Chain(data, at=False).text(f'时间到，还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
+                await display_reward(data, rewards, users)
+                break
+            if message == None:
+                if time_since_last_talk > 30 and not warning_shown:
+                    await data.send(Chain(data, at=False).text(f'30秒内没有博士回答任何答案的话，本游戏就要结束咯~，不想猜了的话，可以发送“不玩了”结束游戏。'))
+                    warning_shown = True
+                    continue
+                continue
+            
+            warning_shown = False
 
-            try:
-                if not event:
-                    time_delta = datetime.datetime.now()
-                    if time_delta - start_time > datetime.timedelta(seconds=max_time):
-                        await data.send(Chain(data, at=False).text(f'5分钟时间到，还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束。'))
-                        await display_reward(data, rewards, users)
-                        return
+            if message.text == '不玩了':
+                await data.send(Chain(message, at=False).text(f'还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
+                await display_reward(data, rewards, users)
+                break
 
-                    if time_delta - last_talk < datetime.timedelta(seconds=95) and time_delta - last_talk > datetime.timedelta(seconds=90):
-                        await data.send(Chain(data, at=False).text(f'30秒内没有博士回答任何答案的话，本游戏就要结束咯~，不想猜了的话，可以发送“不玩了”结束游戏。'))
-                        continue
-                    elif datetime.datetime.now() - last_talk > datetime.timedelta(seconds=120):
-                        await data.send(Chain(data, at=False).text(f'时间到，还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
-                        await display_reward(data, rewards, users)
-                        return
-                    else:
-                        continue
+            write_log(f'收到回答：{message.text}')
 
-                last_talk = datetime.datetime.now()
-                answer = event.message
+            if message.text in answer_candidate.keys():
+                reward_points = int(wordle_config.rewards.bingo * 1)
 
-                if answer.text == '不玩了':
-                    await data.send(Chain(answer, at=False).text(f'还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
+                reward_txt = f'回答正确！图中包括干员{message.text}的{operator_data_type}：{format_candidate(answer_candidate,message.text)}。合成玉+{reward_points}'
+
+                add_points(message, rewards, users, reward_points)
+
+                # 遍历puzzle[y][x],任何元素以◇开头则去掉开头的◇
+                for y in range(len(puzzle)):
+                    for x in range(len(puzzle[y])):
+                        if puzzle[y][x].startswith('♣'):
+                            puzzle[y][x] = '◇' + puzzle[y][x][1:]
+
+                # 从puzzle移除这个字
+                for ans in answer_candidate[message.text]:
+                    for coord in ans["coords"]:
+                        x, y = coord  # 从新的字典结构中获取"coords"，并直接解包为y和x
+                        puzzle[y][x] = '♣' + puzzle[y][x]
+
+                await data.send(Chain(message).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800).text(reward_txt))
+
+                del answer_candidate[message.text]
+
+                if len(answer_candidate) == 0:
+                    await data.send(Chain(answer).text('该题目全部答完，游戏结束！'))
                     await display_reward(data, rewards, users)
-                    return
+                    break
 
-                write_log(f'收到回答：{answer.text}')
+                continue
 
-                if answer.text in answer_candidate.keys():
-                    reward_points = int(wordle_config.rewards.bingo * 1)
+            if message.text in operator_name_dict:
+                reward_points = int(wordle_config.rewards.fail * 1)
 
-                    reward_txt = f'回答正确！图中包括干员{answer.text}的{operator_data_type}：{format_candidate(answer_candidate,answer.text)}。合成玉+{reward_points}'
+                add_points(message, rewards, users, 0-reward_points)
 
-                    add_points(answer, rewards, users, reward_points)
+                await data.send(Chain(message).text(f'抱歉博士，干员{message.text}并不在图中，合成玉-{reward_points}。'))
+                
+                continue
+            
+            continue
 
-                    # 遍历puzzle[y][x],任何元素以◇开头则去掉开头的◇
-                    for y in range(len(puzzle)):
-                        for x in range(len(puzzle[y])):
-                            if puzzle[y][x].startswith('♣'):
-                                puzzle[y][x] = '◇' + puzzle[y][x][1:]
-
-                    # 从puzzle移除这个字
-                    for ans in answer_candidate[answer.text]:
-                        for coord in ans["coords"]:
-                            x, y = coord  # 从新的字典结构中获取"coords"，并直接解包为y和x
-                            puzzle[y][x] = '♣' + puzzle[y][x]
-
-                    await data.send(Chain(answer).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800).text(reward_txt))
-
-                    del answer_candidate[answer.text]
-
-                    if len(answer_candidate) == 0:
-                        await data.send(Chain(answer).text('该题目全部答完，游戏结束！'))
-                        await display_reward(data, rewards, users)
-                        return
-
-                    continue
-
-                if answer.text in operator_name_dict:
-                    reward_points = int(wordle_config.rewards.fail * 1)
-
-                    add_points(answer, rewards, users, 0-reward_points)
-
-                    await data.send(Chain(answer).text(f'抱歉博士，干员{answer.text}并不在图中，合成玉-{reward_points}。'))
-                    continue
-            finally:
-                if event:
-                    event.close_event()
     finally:
         running_tasks.remove(channel_id)
-
-    return

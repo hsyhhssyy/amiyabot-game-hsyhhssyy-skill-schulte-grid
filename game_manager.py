@@ -1,13 +1,9 @@
 import datetime
 
-class GameManager:
-    def __init__(self, max_time, callback=None):
-        self.max_time = max_time
-        self.callback = callback
-        self.start_time = datetime.datetime.now()
-        self.last_talk_time = self.start_time
+async def wait_generator(data, ask=None):
 
-    async def start(self, data, ask=None):
+        start_time = datetime.datetime.now()
+        last_talk_time = start_time
 
         while True:
             event = await data.wait_channel(ask, force=True, clean=bool(ask), max_time=5)
@@ -17,20 +13,29 @@ class GameManager:
 
                 current_time = datetime.datetime.now()
 
-                elapsed_time = (current_time - self.start_time).seconds
-                time_since_last_talk = (current_time - self.last_talk_time).seconds
+                elapsed_time = (current_time - start_time).seconds
+                time_since_last_talk = (current_time - last_talk_time).seconds
 
+                message = None
                 if event:
-                    self.last_talk_time = current_time
+                    last_talk_time = current_time
+                    message=event.message
 
-                if elapsed_time > self.max_time:
-                    return None
-
-                if self.callback:
-                    result = await self.callback(event, elapsed_time, time_since_last_talk)
-                    if result is None:  # If callback returns None, break the loop
-                        return
+                yield message, elapsed_time, time_since_last_talk
                                     
             finally:
                 if event:
                     event.close_event()
+
+class GameManager:
+
+    def __init__(self) -> None:
+        self.gen = None
+
+    async def wait(self,data,ask=None):
+        try:
+            if self.gen is None:
+                self.gen = wait_generator(data, ask)
+            return await self.gen.__anext__()
+        except StopAsyncIteration:  # This exception is raised when the generator is exhausted
+            return None, None, None
