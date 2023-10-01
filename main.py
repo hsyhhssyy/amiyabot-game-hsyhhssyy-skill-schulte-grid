@@ -14,7 +14,7 @@ class SkillSchulteGridPluginInstance(AmiyaBotPluginInstance):
 
 bot = SkillSchulteGridPluginInstance(
     name='方格游戏',
-    version='1.8',
+    version='1.9',
     plugin_id='amiyabot-game-hsyhhssyy-skill-schulte-grid',
     plugin_type='',
     description='玩一场方格游戏',
