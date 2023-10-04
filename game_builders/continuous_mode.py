@@ -9,12 +9,13 @@ import string
 # 测试通过
 
 
-async def build_puzzle_continuous_mode(size_x, size_y, words, timeout):
+async def build_puzzle_continuous_mode(size_x, size_y, words, black_list , timeout):
 
     # 排除名字有重叠的名字，注意此处将会保留较短的名字
-    words = [item_name for item_name in words if not any((name != item_name and name in item_name) for name in words)]
+    combined_words = words + black_list
+    valid_words = [item_name for item_name in combined_words if not any((name != item_name and name in item_name) for name in words)]
 
-    total_word_length = sum(len(word) for word in words)
+    total_word_length = sum(len(word) for word in valid_words)
     total_cells = size_x * size_y
 
     if total_word_length < total_cells:
@@ -26,14 +27,70 @@ async def build_puzzle_continuous_mode(size_x, size_y, words, timeout):
                (size_x - 1, size_y - 1)]
     for _ in range(timeout):
         x, y = random.choice(corners)
-        success, filled_puzzles, answers = await fill_puzzle(copy.deepcopy(empty_puzzle), words, x, y)
+        success, filled_puzzles, answers = await fill_puzzle(copy.deepcopy(empty_puzzle), valid_words, x, y)
 
-        if success:
-            # Assuming only one valid filled puzzle is returned
-            return filled_puzzles[0], answers
+        if success:            
+            if not is_unwanted_word_present(filled_puzzles[0], combined_words, answers):
+                return filled_puzzles[0], answers
 
     return False, "有限的时间内没有找到合适的谜题"
 
+# 使用字典树遍历整个puzzle，确认不在answer里的单词，不可以在puzzle中找到
+def is_unwanted_word_present(puzzle, combined_words, answers):
+    class TrieNode:
+        def __init__(self):
+            self.children = {}
+            self.is_end_of_word = False
+
+
+    class Trie:
+        def __init__(self):
+            self.root = TrieNode()
+
+        def insert(self, word):
+            node = self.root
+            for ch in word:
+                if ch not in node.children:
+                    node.children[ch] = TrieNode()
+                node = node.children[ch]
+            node.is_end_of_word = True
+
+        def search_from(self, puzzle, x, y, node, visited):
+            if node.is_end_of_word:
+                return True
+
+            rows, cols = len(puzzle), len(puzzle[0])
+            if x < 0 or x >= cols or y < 0 or y >= rows or visited[y][x]:
+                return False
+
+            ch = puzzle[y][x]
+            if ch not in node.children:
+                return False
+
+            visited[y][x] = True
+            directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            for dx, dy in directions:
+                new_x, new_y = x + dx, y + dy
+                if self.search_from(puzzle, new_x, new_y, node.children[ch], visited):
+                    visited[y][x] = False
+                    return True
+
+            visited[y][x] = False
+            return False
+        
+    trie = Trie()
+    for word in combined_words:
+        if word not in answers:
+            trie.insert(word)
+
+    rows, cols = len(puzzle), len(puzzle[0])
+    visited = [[False for _ in range(cols)] for _ in range(rows)]
+
+    for y in range(rows):
+        for x in range(cols):
+            if trie.search_from(puzzle, x, y, trie.root, visited):
+                return True  # 不合法的单词出现
+    return False  # 所有单词都检查完了，返回False表示没有非法的单词出现
 
 async def fill_char(puzzle, start_x, start_y, word_left):
     if puzzle[start_y][start_x] != 0:

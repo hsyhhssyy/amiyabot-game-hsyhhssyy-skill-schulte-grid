@@ -1,9 +1,9 @@
 import os
 
 from core.customPluginInstance import AmiyaBotPluginInstance
-from core import Message
+from core import Message,Chain
 
-from .play_game import init_game_dict,play_game
+from .play_game import init_game_dict,play_game,benchmark
 
 curr_dir = os.path.dirname(__file__)
 
@@ -21,6 +21,18 @@ bot = SkillSchulteGridPluginInstance(
     document=f'{curr_dir}/README.md',
     instruction=f'{curr_dir}/README_USE.md'
 )
+
+
+@bot.on_message(keywords=['方格游戏跑分'], level=5)
+async def _(data: Message):
+    if not data.is_admin:
+        await data.send(Chain(data, at=False).text('只有管理员才能跑分'))
+        return
+    
+    await data.send(Chain(data, at=False).text(f'开始跑分，请稍候，可能需要数十秒到一两分钟...'))
+    result = await benchmark()
+    await data.send(Chain(data, at=False).text(f'跑分结束：\n{result}'))
+
 
 @bot.on_message(keywords=['天赋方格'], level=5)
 async def _(data: Message):

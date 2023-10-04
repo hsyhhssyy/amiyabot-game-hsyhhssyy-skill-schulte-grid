@@ -113,6 +113,63 @@ def add_points(answer, rewards, users, points):
         point = 0
     rewards[answer.user_id] = point
 
+async def benchmark():
+    type_string = {
+        'talent': '天赋',
+        'skill': '技能',
+        'equip': '模组'
+    }
+
+    puzzle_translation = {
+        'random': '随机',
+        'continuous': '连续'
+    }
+
+    max_sizes = {}
+
+    for game_type in type_string.keys():
+        words_map = name_dicts[game_type]['data']
+        black_list = name_dicts[game_type]['black_list']
+        words = [name for name in name_dicts[game_type]['data'].keys()]
+
+        max_grid_size = {'random': (0, 0), 'continuous': (0, 0)}
+
+        grid_x = grid_y = 1
+        while True:
+            for puzzle_type in  puzzle_translation.keys():
+                try:
+                    start_time = time.time()
+
+                    if puzzle_type == 'random':
+                        puzzle, answer = await build_puzzle_random_distribution_mode(grid_x, grid_y, words, black_list, 3)
+                    elif puzzle_type == 'continuous':
+                        puzzle, answer = await build_puzzle_continuous_mode(grid_x, grid_y, words, black_list, 3)
+
+                    duration = time.time() - start_time
+                    log.info(f'{type_string[game_type]}方格{grid_x}x{grid_y}，{puzzle_translation[puzzle_type]}模式，用时{duration:.3f}秒')
+
+                    if duration > 1 or puzzle == None or puzzle == False:
+                        max_grid_size[puzzle_type] = (grid_x, grid_y)
+                        break
+                except (RecursionError, MemoryError) as e:
+                    max_grid_size[puzzle_type] = (grid_x-1, grid_y-1)
+                    break
+
+            if all(val != (0, 0) for val in max_grid_size.values()):
+                break
+
+            grid_x += 1
+            grid_y += 1
+
+        max_sizes[game_type] = max_grid_size
+
+    formatted = []
+
+    for game_type, sizes in max_sizes.items():
+        for puzzle_type, size in sizes.items():
+            formatted.append(f"{puzzle_translation[puzzle_type]}{type_string[game_type]}方格 最大 {size[0]}x{size[1]}")
+
+    return " \n ".join(formatted)
 
 async def play_game(data: Message, game_type: str, puzzle_type: str):
     match = re.search('方格(\d+)x(\d+)', data.text_digits)
@@ -142,6 +199,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
     operator_data_type = type_string_map.get(game_type, game_type)
 
     words_map = name_dicts[game_type]['data']
+    black_list = name_dicts[game_type]['black_list']
 
     words = [name for name in name_dicts[game_type]['data'].keys()]
 
@@ -159,9 +217,9 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         start_time = time.time()
 
         if puzzle_type == 'random':
-            puzzle, answer = await build_puzzle_random_distribution_mode(grid_x, grid_y, words, 3)
+            puzzle, answer = await build_puzzle_random_distribution_mode(grid_x, grid_y, words, black_list, 3)
         elif puzzle_type == 'continuous':
-            puzzle, answer = await build_puzzle_continuous_mode(grid_x, grid_y, words, 3)
+            puzzle, answer = await build_puzzle_continuous_mode(grid_x, grid_y, words, black_list, 3)
         else:
             await data.send(Chain(data, at=False).text(f'抱歉，这是兔兔不支持的模式。'))
             return
@@ -170,7 +228,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         elapsed_time = (end_time - start_time) * 1000
         write_log(f'题目已创建，用时{elapsed_time:.2f} ms')
 
-        if puzzle == None:
+        if puzzle == None or puzzle == False:
             await data.send(Chain(data, at=False).text(f'抱歉，兔兔一时间没有想到合适的谜题，请再试一次吧。'))
             return
 

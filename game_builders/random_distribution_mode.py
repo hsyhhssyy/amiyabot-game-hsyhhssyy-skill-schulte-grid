@@ -9,21 +9,40 @@ import string
 # 测试通过
 
 
-async def build_puzzle_random_distribution_mode(size_x, size_y, words, timeout):
+async def build_puzzle_random_distribution_mode(size_x, size_y, words, black_list, timeout):
     
     async def is_valid_word(word, chars_used, words_used):
         """检查词是否与已使用的字符有重复字符或与已用词组合构成新词"""
-        for w in words:
+        combined_words = words + black_list
+        for w in combined_words:
             await asyncio.sleep(0)  # Yield control back to the event loop
             if w != word and word in w and set(w).issubset(chars_used):
                 return False
             if w != word and w in words_used and word in w:
+                return False
+            if w != word and w in word:
                 return False
         for char in word:
             await asyncio.sleep(0)  # Yield control back to the event loop
             if char in chars_used:
                 return False
         return True
+
+    async def contains_blacklisted_word(puzzle, black_list):
+        """检查puzzle是否包含black_list中的任何单词"""
+        for word in black_list:
+            for y in range(size_y):
+                for x in range(size_x):
+                    horizontal_slice = puzzle[y][x:x+len(word)]
+                    vertical_slice = [puzzle[j][x] for j in range(y, min(y+len(word), size_y))]
+
+                    # Check for None in slices and continue if found
+                    if None in horizontal_slice or None in vertical_slice:
+                        continue
+                    
+                    if ''.join(horizontal_slice) == word or ''.join(vertical_slice) == word:
+                        return True
+        return False
 
     async def insert_word(word, filled_puzzle, chars_used, answers, words_used):
         if sum([1 for row in filled_puzzle for cell in row if cell is None]) < len(word): 
@@ -49,7 +68,11 @@ async def build_puzzle_random_distribution_mode(size_x, size_y, words, timeout):
             if not inserted:  # 如果该字符没有被插入，放弃整个word
                 return False
 
-        # 如果word中的所有字符都已成功插入，提交更改
+        # 如果word中的所有字符都已成功插入，检查是否包含黑名单中的单词
+        if await contains_blacklisted_word(temp_filled_puzzle, black_list):
+            return False
+
+        # 提交更改
         for y in range(size_y):
             for x in range(size_x):
                 await asyncio.sleep(0)  # Yield control back to the event loop
