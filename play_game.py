@@ -321,7 +321,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
                 del answer_candidate[message.text]
 
                 if len(answer_candidate) == 0:
-                    await data.send(Chain(answer).text('该题目全部答完，游戏结束！'))
+                    await data.send(Chain(message).text('该题目全部答完，游戏结束！'))
                     await display_reward(data, rewards, users)
                     break
 

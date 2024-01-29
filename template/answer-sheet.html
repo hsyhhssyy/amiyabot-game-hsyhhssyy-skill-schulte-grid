@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link type="text/css" rel="styleSheet" href="font.css"/>
+    <link type="text/css" rel="styleSheet" href="answer-sheet.css"/>
+    <title>template</title>
+</head>
+<body>
+    <div id="template" :style="{ backgroundColor: backcolor }">
+        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(x) }">
+            <div v-for="col in expanded_data" class="cell">
+                <div class="text_div">
+                    <div v-if="col!='❤'&&!col.startsWith('◇')&&!col.startsWith('♣')" class="text" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                        {{col}}
+                    </div>
+                    <img v-if="col=='❤'" class="img" src="./img/amiya.png"/>
+                    <div v-if="col.startsWith('◇')" class="text_fade" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                        {{col.substring(1)}}
+                    </div>
+                    <div v-if="col.startsWith('♣')" class="text_fade_recent" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
+                        {{col.substring(1)}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="js/vue.min.js"></script>
+<script>
+    function hideImage(e) {
+        e.style.display = 'none'
+    }
+
+    const template = new Vue({
+        el: '#template',
+        computed: {
+        },
+        methods: {
+            init(data) {
+                this.$set(this, 'data', JSON.stringify(data));
+            },
+        },
+        data() {
+            return {
+                data: { "answers": [
+                    {
+                        "operator":"布洛卡",
+                        "operator_portait":"",
+                        "skill":"高压电流",
+                        "skill_portait":"",
+                    }
+                ]},
+                expanded_data: [],
+                x: 0,
+                y: 0,
+                backcolor: 'black'
+            }
+        },
+        mounted() {
+            window.init = this.init
+        }
+    })
+</script>
+</html>

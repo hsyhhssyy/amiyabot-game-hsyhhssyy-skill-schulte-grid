@@ -1,7 +1,6 @@
 import os
 
-from core.customPluginInstance import AmiyaBotPluginInstance
-from core import Message,Chain
+from core import Message,Chain,AmiyaBotPluginInstance
 
 from .play_game import init_game_dict,play_game,benchmark
 
@@ -14,7 +13,7 @@ class SkillSchulteGridPluginInstance(AmiyaBotPluginInstance):
 
 bot = SkillSchulteGridPluginInstance(
     name='方格游戏',
-    version='1.9',
+    version='2.0',
     plugin_id='amiyabot-game-hsyhhssyy-skill-schulte-grid',
     plugin_type='',
     description='玩一场方格游戏',
