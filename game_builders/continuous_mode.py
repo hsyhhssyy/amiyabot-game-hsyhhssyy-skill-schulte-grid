@@ -13,7 +13,12 @@ async def build_puzzle_continuous_mode(size_x, size_y, words, black_list , timeo
 
     # 排除名字有重叠的名字，注意此处将会保留较短的名字
     combined_words = words + black_list
+    
+    # 先结合BlackList排除带有重叠名字的名字
     valid_words = [item_name for item_name in combined_words if not any((name != item_name and name in item_name) for name in words)]
+
+    # 再排除BlackList
+    valid_words = [item_name for item_name in valid_words if not any((name in item_name) for name in black_list)]
 
     total_word_length = sum(len(word) for word in valid_words)
     total_cells = size_x * size_y

@@ -38,9 +38,10 @@ def build_name_dict(data_function, keyname):
     for op_id in ArknightsGameData.operators.keys():
         for item in data_function(ArknightsGameData.operators[op_id]):
             item_name = item[keyname]
-            item_name = re.sub(r'[^\w]', '', item_name)
-            temp_dict[item_name] = ArknightsGameData.operators[op_id].name
-            name_keys.append(item_name)
+            if( isinstance(item_name, str) ):
+                item_name = re.sub(r'[^\w]', '', item_name)
+                temp_dict[item_name] = ArknightsGameData.operators[op_id].name
+                name_keys.append(item_name)
 
     for item_name in temp_dict.keys():
         if name_keys.count(item_name) > 1:
@@ -75,7 +76,7 @@ def format_answer(candidate_dict):
         for answer in answers:
             word = answer["word"]  # 从字典结构中直接获取"word"
             formatted_strs.append(f'干员"{operator_name}":"{word}"')
-    return "，".join(formatted_strs)
+    return "\n".join(formatted_strs)
 
 
 def format_candidate(candidate_dict, operator_name):
@@ -88,7 +89,8 @@ def format_candidate(candidate_dict, operator_name):
 
 
 async def display_reward(data, rewards, users):
-    text = '最终成绩：\n'
+    text_prefix = '最终成绩：'
+    text = ''
     for user_id in rewards.keys():
         points = rewards[user_id]
         if points < 0:
@@ -99,7 +101,12 @@ async def display_reward(data, rewards, users):
         text = text + f'{users[user_id]}：{points}分\n'
         UserInfo.add_jade_point(user_id, points, game_config.jade_point_max)
 
-    disp = Chain(data, at=False).text(text)
+    if text == '':
+        text_prefix = text_prefix + '无人得分。'
+    else:
+        text_prefix = text_prefix + '\n' + text
+
+    disp = Chain(data, at=False).text(text_prefix)
     await data.send(disp)
 
 
@@ -112,6 +119,15 @@ def add_points(answer, rewards, users, points):
     if point < 0:
         point = 0
     rewards[answer.user_id] = point
+
+async def test_game():
+    black_list = name_dicts['skill']['black_list']
+    
+    # console log all black list
+
+    for item in black_list:
+        log.info(item)
+
 
 async def benchmark():
     type_string = {
@@ -172,7 +188,7 @@ async def benchmark():
     return " \n ".join(formatted)
 
 async def play_game(data: Message, game_type: str, puzzle_type: str):
-    match = re.search('方格(\d+)x(\d+)', data.text_digits)
+    match = re.search('方格[^\d]*(\d+)x(\d+)', data.text_digits)
 
     if match:
         grid_x = int(match.group(1))
@@ -189,7 +205,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         grid_x = 4
     if grid_y < 4:
         grid_y = 4
-
+    
     type_string_map = {
         'talent': '天赋',
         'skill': '技能',
@@ -264,11 +280,13 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         elif puzzle_type == 'continuous':
             mode_str = f"连续模式，干员的{operator_data_type}每个字都上下左右按顺序相连。"
 
-        ask = Chain(data, at=False).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800, height=320).text(
-            f'上图中有{len(answer_candidate)}位干员的{operator_data_type}，请博士们回答这些干员的名字。\n当前模式为：{mode_str},共计时5分钟。')
+        max_time = grid_x * grid_y * 5
 
-        max_time = 60 * 5
+        ask = Chain(data, at=False).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800, height=320).text(
+            f'上图中有{len(answer_candidate)}位干员的{operator_data_type}，请博士们回答这些干员的名字。\n当前模式为：{mode_str},共计时{max_time}秒。')
+
         rewards = {}
+        answer_interval = round(grid_x * grid_y * 0.5 / 5) * 5
         users = {}
         warning_shown = False
 
@@ -277,13 +295,16 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
         while True:
             message, elapsed_time, time_since_last_talk = await manager.wait(data, ask)
 
-            if elapsed_time>max_time or (warning_shown==True and time_since_last_talk>60):
-                await data.send(Chain(data, at=False).text(f'时间到，还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
+            if message is not None:
+                data = message
+
+            if elapsed_time>max_time or (warning_shown==True and time_since_last_talk>answer_interval*2):
+                await data.send(Chain(data, at=False).text(f'时间到，还未答出的答案包括：\n{format_answer(answer_candidate)}，游戏结束~'))
                 await display_reward(data, rewards, users)
                 break
             if message == None:
-                if time_since_last_talk > 30 and not warning_shown:
-                    await data.send(Chain(data, at=False).text(f'30秒内没有博士回答任何答案的话，本游戏就要结束咯~，不想猜了的话，可以发送“不玩了”结束游戏。'))
+                if time_since_last_talk > answer_interval and not warning_shown:
+                    await data.send(Chain(data, at=False).text(f'{answer_interval}秒内没有博士回答任何答案的话，本游戏就要结束咯~，不想猜了的话，可以发送“不玩了”结束游戏。'))
                     warning_shown = True
                     continue
                 continue
@@ -291,7 +312,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
             warning_shown = False
 
             if message.text == '不玩了':
-                await data.send(Chain(message, at=False).text(f'还未答出的答案包括：{format_answer(answer_candidate)}，游戏结束~'))
+                await data.send(Chain(data, at=False).text(f'还未答出的答案包括：\n{format_answer(answer_candidate)}，游戏结束~'))
                 await display_reward(data, rewards, users)
                 break
 
@@ -316,12 +337,12 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
                         x, y = coord  # 从新的字典结构中获取"coords"，并直接解包为y和x
                         puzzle[y][x] = '♣' + puzzle[y][x]
 
-                await data.send(Chain(message).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800).text(reward_txt))
+                await data.send(Chain(data).html(f'{curr_dir}/template/schulte-grid.html', data={"puzzle": puzzle, "type": puzzle_type}, width=800).text(reward_txt))
 
                 del answer_candidate[message.text]
 
                 if len(answer_candidate) == 0:
-                    await data.send(Chain(message).text('该题目全部答完，游戏结束！'))
+                    await data.send(Chain(data).text('该题目全部答完，游戏结束！'))
                     await display_reward(data, rewards, users)
                     break
 
@@ -332,7 +353,7 @@ async def play_game(data: Message, game_type: str, puzzle_type: str):
 
                 add_points(message, rewards, users, 0-reward_points)
 
-                await data.send(Chain(message).text(f'抱歉博士，干员{message.text}并不在图中，合成玉-{reward_points}。'))
+                await data.send(Chain(data).text(f'抱歉博士，干员{message.text}并不在图中，合成玉-{reward_points}。'))
                 
                 continue
             

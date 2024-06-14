@@ -2,7 +2,7 @@ import os
 
 from core import Message,Chain,AmiyaBotPluginInstance
 
-from .play_game import init_game_dict,play_game,benchmark
+from .play_game import init_game_dict,play_game,benchmark,test_game
 
 curr_dir = os.path.dirname(__file__)
 
@@ -13,7 +13,7 @@ class SkillSchulteGridPluginInstance(AmiyaBotPluginInstance):
 
 bot = SkillSchulteGridPluginInstance(
     name='方格游戏',
-    version='2.0',
+    version='2.4',
     plugin_id='amiyabot-game-hsyhhssyy-skill-schulte-grid',
     plugin_type='',
     description='玩一场方格游戏',
@@ -21,6 +21,13 @@ bot = SkillSchulteGridPluginInstance(
     instruction=f'{curr_dir}/README_USE.md'
 )
 
+@bot.on_message(keywords=['方格测试'], level=5)
+async def _(data: Message):
+    if not data.is_admin:
+        await data.send(Chain(data, at=False).text('只有管理员才能执行测试'))
+        return
+    
+    await test_game()
 
 @bot.on_message(keywords=['方格游戏跑分'], level=5)
 async def _(data: Message):

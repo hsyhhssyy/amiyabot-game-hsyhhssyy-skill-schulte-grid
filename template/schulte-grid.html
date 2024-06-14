@@ -11,7 +11,7 @@
 </head>
 <body>
     <div id="template" :style="{ backgroundColor: backcolor }">
-        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(x) }">
+        <div class="grid-container" :style="{ 'grid-template-columns' : '1fr '.repeat(x) }" v-if="expanded_data.length>0">
             <div v-for="col in expanded_data" class="cell">
                 <div class="text_div">
                     <div v-if="col!='❤'&&!col.startsWith('◇')&&!col.startsWith('♣')" class="text" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
@@ -23,6 +23,21 @@
                     </div>
                     <div v-if="col.startsWith('♣')" class="text_fade_recent" :style="{ 'font-size' : ''+(100/x*0.6)+'vw' }">
                         {{col.substring(1)}}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="answer-container">
+            <div class="answer-table">
+                <div class="answer-table-row" v-for="(row, index) in answer" v-if="index % 2 === 0">
+                    <div class="answer-entry">
+                        <img :src="row.avatar" class="answer-avatar"/>
+                        <div class="answer-skill-name">{{row.skill_name}}</div>
+                    </div>
+                    <!-- 检查下一个元素是否存在 -->
+                    <div class="answer-entry" v-if="answer[index + 1]">
+                        <img :src="answer[index + 1].avatar" class="answer-avatar"/>
+                        <div class="answer-skill-name">{{answer[index + 1].skill_name}}</div>
                     </div>
                 </div>
             </div>
@@ -44,31 +59,67 @@
                 this.$set(this, 'data', JSON.stringify(data));
 
                 puzzle = data["puzzle"]
-                expanded_data = []
+                
+                if (puzzle.length > 0) {                    
+                    expanded_data = []
+                    for (i = 0; i < puzzle.length; i++) {
+                        for (j = 0; j < puzzle[i].length; j++) {
+                            expanded_data.push(puzzle[i][j])
+                        }
+                    }
 
-                for (i = 0; i < puzzle.length; i++) {
-                    for (j = 0; j < puzzle[i].length; j++) {
-                        expanded_data.push(puzzle[i][j])
+                    this.y = puzzle.length;
+                    this.x = puzzle[0] ? puzzle[0].length : 0; // 默认data的每个子数组长度是相同的
+
+                    this.$set(this, 'expanded_data', expanded_data);
+                    if (data["type"] == "continuous") {
+                        this.$set(this, 'backcolor', 'black');
+                    } else if (data["type"] == "random") {
+                        this.$set(this, 'backcolor', 'green');
+                    } else {
+                        this.$set(this, 'backcolor', 'white');
                     }
                 }
 
-                this.y = puzzle.length;
-                this.x = puzzle[0] ? puzzle[0].length : 0; // 默认data的每个子数组长度是相同的
-
-                this.$set(this, 'expanded_data', expanded_data);
-                if (data["type"] == "continuous") {
-                    this.$set(this, 'backcolor', 'black');
-                } else if (data["type"] == "random") {
-                    this.$set(this, 'backcolor', 'green');
-                } else {
-                    this.$set(this, 'backcolor', 'white');
+                if (data["answer"]&&data["answer"].length > 0) {
+                    this.$set(this, 'answer', data["answer"]);
+                }else{
+                    this.$set(this, 'answer', []);
                 }
             },
         },
         data() {
             return {
-                data: { "puzzle": [['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟']], "type": "continuous" },
+                data: {
+                     "puzzle": [['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟'], ['明', '日', '方', '舟']],
+                     "type": "continuous",
+                     "answer":[{
+                        "name":"蜜蜡",
+                        "avatar":"./img/amiya.png",
+                        "skill_name":"守卫尖碑",
+                        "skill_icon":"./img/amiya.png"
+                     },
+                        {
+                            "name":"夜烟",
+                            "avatar":"./img/amiya.png",
+                            "skill_name":"赤色之瞳",
+                            "skill_icon":"./img/amiya.png"
+                        },
+                    ] },
                 expanded_data: [],
+                answer:[{
+                        "name":"假日威龙P",
+                        "avatar":"./img/amiya.png",
+                        "skill_name":"假日风暴!",
+                        "skill_icon":"./img/amiya.png"
+                     },
+                    {
+                        "name":"华天使",
+                        "avatar":"./img/amiya.png",
+                        "skill_name":"不稳定血浆过载模式",
+                        "skill_icon":"./img/amiya.png"
+                    },
+                    ],
                 x: 0,
                 y: 0,
                 backcolor: 'black'
